@@ -1,0 +1,4 @@
+hi my name is pratik
+this is a sample file
+i am going to open this file in a hex byte editor 
+i want to visualize the data in this file.
