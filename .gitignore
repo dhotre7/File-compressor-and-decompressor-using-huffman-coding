@@ -1,0 +1,5 @@
+main
+compressor
+decompressor
+*.o
+*.huff

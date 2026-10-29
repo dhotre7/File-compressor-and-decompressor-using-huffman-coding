@@ -3,13 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "compressor.h"
 
 typedef struct node {
   unsigned char ch;
   unsigned long freq;
   struct node *left;
   struct node *right;
-
 } node;
 
 typedef struct heap {
@@ -29,10 +29,10 @@ typedef struct bitwriter {
 } bitwriter;
 
 // sets the heap size to zero so the heap starts empty
-void init_heap(heap *h) { h->size = 0; }
+static void init_heap(heap *h) { h->size = 0; }
 
 // moves a node down until both of its children have a bigger frequency
-void heapify(heap *h, int i) {
+static void heapify(heap *h, int i) {
   int l = 2 * i + 1;
   int r = 2 * i + 2;
   int smallest = i;
@@ -51,7 +51,7 @@ void heapify(heap *h, int i) {
 }
 
 // removes and returns the node with the smallest frequency
-node *extract_min(heap *h) {
+static node *extract_min(heap *h) {
   if (h->size == 0) {
     return NULL;
   }
@@ -63,7 +63,7 @@ node *extract_min(heap *h) {
 }
 
 // creates a new tree node with no children
-node *create_node(unsigned char ch, unsigned long freq) {
+static node *create_node(unsigned char ch, unsigned long freq) {
   node *new_node = (node *)malloc(sizeof(node));
   new_node->ch = ch;
   new_node->freq = freq;
@@ -73,7 +73,7 @@ node *create_node(unsigned char ch, unsigned long freq) {
 }
 
 // adds a node at the end of the heap and moves it up to its place
-void insert_heap(heap *h, node *n) {
+static void insert_heap(heap *h, node *n) {
   int j = h->size;
   h->data[j] = n;
   h->size++;
@@ -92,7 +92,7 @@ void insert_heap(heap *h, node *n) {
 }
 
 // walks the tree and stores the 0/1 code of every leaf in codes
-void generate_codes(node *root, char *path, int depth, char codes[256][256]) {
+static void generate_codes(node *root, char *path, int depth, char codes[256][256]) {
   if (root == NULL) {
     return;
   }
@@ -112,7 +112,7 @@ void generate_codes(node *root, char *path, int depth, char codes[256][256]) {
 }
 
 // frees every node of the tree
-void free_tree(node *root) {
+static void free_tree(node *root) {
   if (root == NULL) {
     return;
   }
@@ -122,7 +122,7 @@ void free_tree(node *root) {
 }
 
 // adds one bit to the output and writes a byte once 8 bits are collected
-void put_bit(bitwriter *w, int bit) {
+static void put_bit(bitwriter *w, int bit) {
   w->cur = (w->cur << 1) | bit;
   w->nbits++;
   if (w->nbits == 8) {
@@ -136,22 +136,21 @@ void put_bit(bitwriter *w, int bit) {
 }
 
 // writes the lowest n bits of value, highest bit first
-void put_bits(bitwriter *w, unsigned int value, int n) {
+static void put_bits(bitwriter *w, unsigned int value, int n) {
   for (int i = n - 1; i >= 0; i--) {
     put_bit(w, (value >> i) & 1);
   }
 }
 
 // fills the last byte with zero bits and writes it
-void flush_bits(bitwriter *w) {
+static void flush_bits(bitwriter *w) {
   while (w->nbits != 0) {
     put_bit(w, 0);
   }
 }
 
-// writes the tree shape: 1 and the byte for a leaf, 0 and both subtrees for
-// any other node
-void write_tree(bitwriter *w, node *root) {
+// writes the tree shape: 1 and the byte for a leaf, 0 and both subtrees for any other node
+static void write_tree(bitwriter *w, node *root) {
   if (root->left == NULL && root->right == NULL) {
     put_bit(w, 1);
     put_bits(w, root->ch, 8);
@@ -163,23 +162,17 @@ void write_tree(bitwriter *w, node *root) {
 }
 
 // compresses the input file into the output file using huffman coding
-int main(int argc, char *argv[]) {
-  if (argc < 3) {
-    printf("Usage: %s <input file> <output file>\n", argv[0]);
-    exit(1);
-  }
-  int fd;
-  char *filename;
-  filename = argv[1];
-  fd = open(filename, O_RDONLY);
+int compress(char *filename, char *outname) {
+  int fd = open(filename, O_RDONLY);
   if (fd == -1) {
     printf("Error opening file\n");
-    exit(1);
+    return 1;
   }
-  int out = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  int out = open(outname, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (out == -1) {
     printf("Error creating output file\n");
-    exit(1);
+    close(fd);
+    return 1;
   }
 
   int arr[256];
@@ -260,3 +253,14 @@ int main(int argc, char *argv[]) {
   close(out);
   return 0;
 }
+
+#ifdef STANDALONE
+// standalone entry point for compressor
+int main(int argc, char *argv[]) {
+  if (argc < 3) {
+    printf("Usage: %s <input file> <output file>\n", argv[0]);
+    exit(1);
+  }
+  return compress(argv[1], argv[2]);
+}
+#endif
